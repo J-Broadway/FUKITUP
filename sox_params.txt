@@ -1,1 +1,1 @@
-band 100 10
+equalizer 1k 5 3 pitch 0.05 pitch -0.01

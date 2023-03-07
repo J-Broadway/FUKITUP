@@ -1,4 +1,8 @@
-saved/
 *.png
 *.mp4
 *.mov
+*.tif
+*.bmp
+*.jpg
+*.rgb
+*.raw
