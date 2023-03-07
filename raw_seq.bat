@@ -40,7 +40,7 @@ for %%f in ("%cd%\*.rgb") do (
 	echo Apply SOX affects to !rgb!
 	
 	sox -t ul -c 1 -r 41k !rgb! -t raw !rgb_name!_sox.rgb phaser
-	magick convert -size 1920x1080 -depth 8 rgb:!rgb_name!_sox.rgb !rgb_name!_moshed.png
+	magick convert -size %width%x%height% -depth 8 rgb:!rgb_name!_sox.rgb !rgb_name!_moshed.png
 	
 )
 
