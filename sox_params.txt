@@ -1,1 +1,1 @@
-phaser
+band 100 10
