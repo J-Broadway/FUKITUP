@@ -10,8 +10,11 @@ set /p height="Enter video height: "
 set video_name=%video_path%
 for /F "delims=" %%i in ("%video_path%") do (
 	set video_name=%%~ni
+	set "filepath=%%~pi"
 	set ext=%%~xi
 )
+
+cd %filepath%
 mkdir %video_name%
 
 :: FFMPEG 
