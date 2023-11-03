@@ -1,6 +1,8 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+call ascii.bat
+
 :: Ask the user for video info
 set /p img_path="Enter IMG path: "
 
@@ -60,7 +62,9 @@ magick convert -size %resolution% -depth 8 rgb:%img_name%_sox.rgb %img_name%_mos
 echo DONE!
 start "" %img_name%_moshed%ext%
 
-set /p what_next="What do you wanna do next?: "
+set /p what_next="What do you wanna do next: "
+echo ^| Run It Back ^| Stack It ^| Combine It ^| New IMG ^| Save IMG ^| Load Preset ^| Save Preset ^| Create Sequence ^|
+echo   ^^             ^^     ^^    ^^            ^^         ^^          ^^    ^^        ^^    ^^        ^^
 if /I "!what_next!"=="R" (
 	goto SOX
 )

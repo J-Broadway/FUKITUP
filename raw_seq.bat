@@ -1,6 +1,8 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+call ascii.bat
+
 :: Ask the user for video info
 set /p video_path="Enter the path to the video: "
 set /p width="Enter video width: "
@@ -43,7 +45,7 @@ for %%f in ("%cd%\*.rgb") do (
 	echo Apply SOX affects to !rgb!
 	
 	sox -t ul -c 1 -r 41k !rgb! -t raw !rgb_name!_sox.rgb phaser
-	magick convert -size %width%x%height% -depth 8 rgb:!rgb_name!_sox.rgb !rgb_name!_moshed.png
+	magick convert -size %width%x%height% -depth 8 rgb:!rgb_name!_sox.rgb moshed_!rgb_name!.png
 	
 )
 
