@@ -4,6 +4,7 @@ import sys
 load_menu         = '| Load Media | Open Folder | Load Preset | Info | '
 load_menu_pointer = '  ^            ^             ^    ^        ^'
 
+
 @click.command()
 @click.option('--load_media', '-l')
 @click.option('--open_folder', '-o')
@@ -19,12 +20,15 @@ def startup(load_media, open_folder, load_preset, info):
     if info:
         print('info')
 
+# Custom error handling for parameters
 def main():
     args = sys.argv[1:]  # Get command line arguments except the filename
     try:
         startup(standalone_mode=False)
     except click.ClickException as e:
-        if '-lp' in args:
+        if '-l' in args:
+            print('Yup')
+        elif '-lp' in args:
             print("Error related to load preset option:", e.message)
         elif '-o' in args:
             print("Error related to open folder option:", e.message)
