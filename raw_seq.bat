@@ -39,12 +39,18 @@ for %%f in ("%cd%\*.png") do (
 
 :: Apply SOX effect
 cd %raw_dir%
+
+:SOX
+echo Applying audio effects...
+set /p sox_params=<%~dp0sox_params.txt
+@echo %sox_params%
+
 for %%f in ("%cd%\*.rgb") do (
     set "rgb=%%~nxf"
 	set "rgb_name=!rgb:~0,-4!"
 	echo Apply SOX affects to !rgb!
 	
-	sox -t ul -c 1 -r 41k !rgb! -t raw !rgb_name!_sox.rgb phaser
+	sox -t ul -c 1 -r 41k !rgb! -t raw !rgb_name!_sox.rgb %sox_params%
 	magick convert -size %width%x%height% -depth 8 rgb:!rgb_name!_sox.rgb moshed_!rgb_name!.png
 	
 )
