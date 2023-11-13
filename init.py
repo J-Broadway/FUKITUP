@@ -3,7 +3,7 @@ import subprocess
 import pkg_resources
 
 # Check if requirements are satisfied
-dependencies = ['click==8.1.7', 'Pillow==10.1.0', 'opencv-python==4.8.1.78']
+dependencies = ['click==8.1.7', 'Pillow', 'opencv-python']
 
 def main():
     try:

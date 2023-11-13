@@ -1,0 +1,6 @@
+Had to do 
+pip install --upgrade pip setuptools wheel
+
+After installing opencv because I was getting this error:
+ERROR: Could not build wheels for opencv-python which use PEP 517 and cannot be installed directly
+
