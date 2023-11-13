@@ -1,25 +1,22 @@
 import init
 init.main()
 
+from colorama import init, Fore, Style
+# Initialize Colorama
+init(autoreset=True)
+# Custom Colors
+DEFAULT = Style.RESET_ALL
+LIGHT_YELLOW = '\033[93m'
+
 from PIL import Image
 import subprocess
 import click
-import sys
 import cv2
+import sys
 import os
 
-def load_menu_txt():
-    print('| Load Media | Open Folder | Load Preset | Info | ')
-    print('  ^            ^             ^    ^        ^')
-    return input("Whatcha wanna do: ").lower()
-
-
-def re_run(flag, input=''):
-    # Re-run FUKITUP.py with proper click formatting
-    command = [sys.executable, 'FUKITUP.py', f'-{flag}']
-    if input:
-        command.append(input)
-    subprocess.run(command)
+# Global Variable initialization
+media_info = None
 
 def dequote(path):
     return path.strip("'\"")
@@ -27,37 +24,19 @@ def dequote(path):
 def is_valid_media(ext, media_types):
     return ext.lower() in media_types
 
-def get_image_attributes(path):
-    try:
-        with Image.open(path) as img:
-            width, height = img.size
-            return {
-                'name': os.path.splitext(os.path.basename(path))[0],
-                'width': width,
-                'height': height,
-                'filetype': img.format.lower()
-            }
-    except Exception as e:
-        return str(e)
+def get_media_info(path):
+    print(Fore.YELLOW + f'{LIGHT_YELLOW}Loading: {DEFAULT}' + path)
+    path = dequote(path)
 
-def get_video_attributes(path):
-    try:
-        cap = cv2.VideoCapture(path)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
-        return {
-            'name': os.path.splitext(os.path.basename(path))[0],
-            'width': width,
-            'height': height,
-            'frames': frames,
-            'fps': fps,
-            'filetype': os.path.splitext(path)[1].lstrip('.').lower()
-        }
-    except Exception as e:
-        return str(e)
+    if not os.path.exists(path):
+        print(Fore.RED + f"ERROR: The inputted path, '{path}' is not valid.")
+        exit()
+
+    media_info = classify_media(path)
+    if media_info == "invalid":
+        print("The file extension is not a valid media file type.\nAcceptable image formats: png, jpg, tif, tiff.\nAcceptable video formats: mp4, mov, gif.")
+    else:
+        return media_info
 
 def classify_media(path):
     image_formats = {'png', 'jpg', 'tif', 'tiff'}
@@ -73,28 +52,94 @@ def classify_media(path):
     else:
         return "invalid"
 
-def loading(path):
-    print('Loading: ' + path)
-    path = dequote(path)
+def get_image_attributes(path):
+    try:
+        with Image.open(path) as img:
+            width, height = img.size
+            return {
+                'media_type': 'image',
+                'name': os.path.splitext(os.path.basename(path))[0],
+                'width': width,
+                'height': height,
+                'filetype': img.format.lower(),
+                'root_path': os.path.dirname(path)
+            }
+    except Exception as e:
+        return str(e)
 
-    if not os.path.exists(path):
-        print("The inputted path is not valid.")
-        return
+def get_video_attributes(path):
+    try:
+        cap = cv2.VideoCapture(path)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        return {
+            'media_type': 'video',
+            'name': os.path.splitext(os.path.basename(path))[0],
+            'width': width,
+            'height': height,
+            'frames': frames,
+            'fps': round(fps, 2),
+            'filetype': os.path.splitext(path)[1].lstrip('.').lower(),
+            'root_path': os.path.dirname(path)
+        }
+    except Exception as e:
+        return str(e)
 
-    media_info = classify_media(path)
-    if media_info == "invalid":
-        print("The file extension is not a valid media file type.\nAcceptable image formats: png, jpg, tif, tiff.\nAcceptable video formats: mp4, mov, gif.")
-    else:
-        print(media_info)
+def convert_to_raw():
+    print('Creating Raw Images...')
+    sys.exit()
 
 @click.command()
 @click.option('--load_media', '-l')
 @click.option('--open_folder', '-o')
 @click.option('--load_preset', '-lp')
 @click.option('--info', '-i', is_flag=True)
-def startup(load_media, open_folder, load_preset, info):
+def click_params(load_media, open_folder, load_preset, info):
     if load_media:
-        loading(load_media)
+        startup(load_media=load_media)
+
+def startup(load_media=None, open_folder=None, load_preset=None, info=None):
+    global media_info
+
+    if load_media:
+        media_info = get_media_info(load_media)
+        base_folder_name = f"{media_info['name']}_fck"
+        folder_path = os.path.join(media_info['root_path'], base_folder_name)
+
+        if os.path.exists(folder_path):
+            print(
+                f"""
+                {LIGHT_YELLOW}{base_folder_name} already exists...{DEFAULT}
+                ----------------------------------
+                | Overwrite | Keep Both | Cancel |
+                  ^           ^           ^
+                """
+            )
+            user_choice = input(f"Choose an action: ").lower()
+            if user_choice == 'o':
+                import shutil
+                shutil.rmtree(folder_path)  # Remove the existing folder and all its contents
+            elif user_choice == 'c':
+                exit()
+            elif user_choice == 'k':
+                # Find the highest existing folder number
+                counter = 2
+                while os.path.exists(f"{folder_path}_{counter}"):
+                    counter += 1
+                folder_path = f"{folder_path}_{counter}"
+
+        # Make folder path directory
+        os.makedirs(folder_path)
+
+        # Append new info to media_info dictionary
+        media_info['folder_name'] = os.path.basename(folder_path)
+
+        # Run the convert_to_raw function
+        convert_to_raw()
+
     if open_folder:
         print(open_folder)
     if load_preset:
@@ -102,36 +147,64 @@ def startup(load_media, open_folder, load_preset, info):
     if info:
         print(info)
 
+def load_menu_txt():
+    load_media = None
+    open_folder = None
+    load_preset = None
+    info = None
+
+    print(
+        f"""
+        | Load Media | Open Folder | Load Preset | Info | Exit |
+          ^            ^             ^    ^        ^      ^
+        """
+    )
+    user_input = input("Whatcha wanna do: ").lower()
+
+    if user_input == 'l':
+        load_media = dequote(input('Media Path: '))
+
+    return (load_media, open_folder, load_preset, info)
+
+# This isn't really the main function... The function that's doing the most is actually the startup() function.
 def main():
     args_len = len(sys.argv)
     args = sys.argv[1:]  # Get command line arguments except the filename
 
     try:
         """Custom error handling for click"""
-        startup(standalone_mode=False)
+        click_params(standalone_mode=False)
+    except SystemExit:
+        raise
     except click.ClickException as e:
         def click_error():
             print(e.message)
             exit()
 
         if '-l' in args:
-            media_input = input('Media Path: ')
-            re_run(flag='l', input=media_input)
+            media_input = dequote(input('Media Path: '))
+            # Check if valid path
+            if not os.path.isfile(media_input):
+                print(Fore.RED + f"ERROR: The inputted path, '{media_input}' is not valid.")
+                exit()
+
+            startup(load_media=media_input)
         elif '-o' in args:
             folder_input = input('Folder Path: ')
-            re_run(flag='o', input=folder_input)
+            exit()
         elif '-lp' in args:
             preset_load = input('Preset to load: ')
-            re_run(flag='lp', input=preset_load)
+            exit()
         elif '-i' in args:
             print("Error related to info option:", e.message)
-            re_run(flag='i')
+            exit()
         else:
             click_error()
 
     if len(sys.argv) == 1:
-        re_run(flag=load_menu_txt())
-
+        user_input = load_menu_txt()
+        print(user_input)
+        startup(user_input)
 
 if __name__ == '__main__':
     main()
