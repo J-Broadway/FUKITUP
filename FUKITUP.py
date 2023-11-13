@@ -9,7 +9,6 @@ DEFAULT = Style.RESET_ALL
 LIGHT_YELLOW = '\033[93m'
 
 from PIL import Image
-import subprocess
 import click
 import cv2
 import sys
@@ -130,6 +129,7 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None):
                 while os.path.exists(f"{folder_path}_{counter}"):
                     counter += 1
                 folder_path = f"{folder_path}_{counter}"
+                print(f'Making directory {folder_path}')
 
         # Make folder path directory
         os.makedirs(folder_path)
@@ -159,52 +159,39 @@ def load_menu_txt():
           ^            ^             ^    ^        ^      ^
         """
     )
-    user_input = input("Whatcha wanna do: ").lower()
+    user_input = input(f'Whatcha wanna do: ').lower()
 
     if user_input == 'l':
-        load_media = dequote(input('Media Path: '))
+        load_media = dequote(input(f'Media Path: '))
 
-    return (load_media, open_folder, load_preset, info)
+    return load_media
 
 # This isn't really the main function... The function that's doing the most is actually the startup() function.
 def main():
+
     args_len = len(sys.argv)
     args = sys.argv[1:]  # Get command line arguments except the filename
+
+    # If FUKITUP.py is run directly (without arguments) then bring ser to load menu.
+    if args_len == 1:
+        user_input = load_menu_txt()
+        startup(load_media=user_input)
+
+    def click_error():
+        print('CLICK EXCEPTION WAS RAISED')
+        print(e.message)
+        exit()
 
     try:
         """Custom error handling for click"""
         click_params(standalone_mode=False)
-    except SystemExit:
-        raise
     except click.ClickException as e:
-        def click_error():
-            print(e.message)
-            exit()
-
-        if '-l' in args:
-            media_input = dequote(input('Media Path: '))
-            # Check if valid path
-            if not os.path.isfile(media_input):
-                print(Fore.RED + f"ERROR: The inputted path, '{media_input}' is not valid.")
-                exit()
-
-            startup(load_media=media_input)
-        elif '-o' in args:
-            folder_input = input('Folder Path: ')
-            exit()
-        elif '-lp' in args:
-            preset_load = input('Preset to load: ')
-            exit()
-        elif '-i' in args:
-            print("Error related to info option:", e.message)
-            exit()
+        if args[0] == '-l':
+            user_input = input('Media Input: ')
+            startup(load_media=user_input)
         else:
             click_error()
 
-    if len(sys.argv) == 1:
-        user_input = load_menu_txt()
-        print(user_input)
-        startup(user_input)
 
 if __name__ == '__main__':
     main()
