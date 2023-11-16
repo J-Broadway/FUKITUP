@@ -9,6 +9,7 @@ DEFAULT = Style.RESET_ALL
 LIGHT_YELLOW = '\033[93m'
 
 from PIL import Image
+import subprocess
 import click
 import cv2
 import sys
@@ -29,7 +30,7 @@ def get_media_info(path):
 
     if not os.path.exists(path):
         print(Fore.RED + f"ERROR: The inputted path, '{path}' is not valid.")
-        exit()
+        load_menu()
 
     media_info = classify_media(path)
     if media_info == "invalid":
@@ -57,6 +58,7 @@ def get_image_attributes(path):
             width, height = img.size
             return {
                 'media_type': 'image',
+                'media_path': path,
                 'name': os.path.splitext(os.path.basename(path))[0],
                 'width': width,
                 'height': height,
@@ -76,6 +78,7 @@ def get_video_attributes(path):
         cap.release()
         return {
             'media_type': 'video',
+            'media_path': path,
             'name': os.path.splitext(os.path.basename(path))[0],
             'width': width,
             'height': height,
@@ -88,8 +91,26 @@ def get_video_attributes(path):
         return str(e)
 
 def convert_to_raw():
-    print('Creating Raw Images...')
-    sys.exit()
+    print(f'{LIGHT_YELLOW}Creating Raw Images...')
+    print(media_info)
+
+    # Make directory to store RAW img formats.
+    raw_folder = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_raw')
+    output = 'rgb:{}.rgb'.format(raw_folder + '\\' + media_info['folder_name'])
+    print(output)
+    os.makedirs(raw_folder)
+
+    # Run Image Magick
+    cmd = 'magick convert {} {}'.format(media_info['media_path'], output)
+    print(cmd)
+    subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # Determine media type
+    if media_info['media_type'] == 'image':
+        img = media_info['media_path']
+
+
+
 
 @click.command()
 @click.option('--load_media', '-l')
@@ -122,7 +143,7 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None):
                 import shutil
                 shutil.rmtree(folder_path)  # Remove the existing folder and all its contents
             elif user_choice == 'c':
-                exit()
+                startup(load_media=load_menu_txt())
             elif user_choice == 'k':
                 # Find the highest existing folder number
                 counter = 2
@@ -135,9 +156,10 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None):
         os.makedirs(folder_path)
 
         # Append new info to media_info dictionary
+        media_info['folder_path'] = folder_path
         media_info['folder_name'] = os.path.basename(folder_path)
 
-        # Run the convert_to_raw function
+        # Start creating raw imges.
         convert_to_raw()
 
     if open_folder:
@@ -155,6 +177,7 @@ def load_menu_txt():
 
     print(
         f"""
+        --------------------------------------------------------
         | Load Media | Open Folder | Load Preset | Info | Exit |
           ^            ^             ^    ^        ^      ^
         """
@@ -163,8 +186,13 @@ def load_menu_txt():
 
     if user_input == 'l':
         load_media = dequote(input(f'Media Path: '))
+    if user_input == 'e':
+        exit()
 
     return load_media
+
+def load_menu():
+    startup(load_media=load_menu_txt())
 
 # This isn't really the main function... The function that's doing the most is actually the startup() function.
 def main():
@@ -174,8 +202,7 @@ def main():
 
     # If FUKITUP.py is run directly (without arguments) then bring ser to load menu.
     if args_len == 1:
-        user_input = load_menu_txt()
-        startup(load_media=user_input)
+        load_menu()
 
     def click_error():
         print('CLICK EXCEPTION WAS RAISED')
