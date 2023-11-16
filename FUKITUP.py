@@ -7,6 +7,7 @@ init(autoreset=True)
 # Custom Colors
 DEFAULT = Style.RESET_ALL
 LIGHT_YELLOW = '\033[93m'
+MAGENTA = '\033[95m'
 
 from PIL import Image
 import subprocess
@@ -15,8 +16,9 @@ import cv2
 import sys
 import os
 
-# Global Variable initialization
+# Global Variable Initialization
 media_info = None
+
 
 def dequote(path):
     return path.strip("'\"")
@@ -92,37 +94,96 @@ def get_video_attributes(path):
 
 def convert_to_raw():
     print(f'{LIGHT_YELLOW}Creating Raw Images...')
-    print(media_info)
+    # print(media_info)
 
-    # Make directory to store RAW img formats.
+    # Make directory to store RAW images.
     raw_folder = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_raw')
     output = 'rgb:{}.rgb'.format(raw_folder + '\\' + media_info['folder_name'])
-    print(output)
     os.makedirs(raw_folder)
 
-    # Run Image Magick
-    cmd = 'magick convert {} {}'.format(media_info['media_path'], output)
-    print(cmd)
-    subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Append new metadata to dictionary
+    media_info['raw_folder_path'] = raw_folder
 
     # Determine media type
     if media_info['media_type'] == 'image':
-        img = media_info['media_path']
+        # Run Image Magick and convert each img to raw .rgb file format.
+        cmd = 'magick convert {} {}'.format(media_info['media_path'], output)
+        subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+    if media_info['media_type'] == 'video':
+        # TODO: Convert video to a image sequence stored in _seq folder
+        # TODO: Run Image Magick and convert each img to raw .rgb file format
+        print(media_info)
+        pass
 
+def sox_effects(sox_params):
+    # Make directory to store modified SOX image and add new meta data to media_info dictionary.
+    output = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_sox')
+    media_info['sox_folder_path'] = output
+    os.mkdir(output)
 
+    if media_info['media_type'] == 'image':
+        print(
+            f"""
+        {LIGHT_YELLOW}Applying audio effects...
+        {MAGENTA}{sox_params}
+        """)
+
+        # Run SOX
+        raw_file = os.path.join(media_info['raw_folder_path'], media_info['folder_name'])
+        output = os.path.join(output, media_info['folder_name'])
+        cmd = f'sox -t ul -c 1 -r 41k {raw_file}.rgb -t raw {output}_sox.rgb {sox_params}'
+        subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if media_info['media_type'] == 'video':
+        print(sox_params, 'video')
+
+def reconvert():
+    # Reconvert raw .rgb back to its original file type
+    og_file = os.path.join(media_info['sox_folder_path'], os.path.basename(media_info['sox_folder_path']))
+    filetype = media_info['filetype']
+    width = media_info['width']
+    height = media_info['height']
+
+    # For Output
+    filename = os.path.join(media_info['folder_path'], media_info['folder_name'] + 't')
+    output = f'{filename}.{filetype}'
+
+    # Execute conversion
+    cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{og_file}.rgb {output}'
+    subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 @click.command()
 @click.option('--load_media', '-l')
 @click.option('--open_folder', '-o')
 @click.option('--load_preset', '-lp')
 @click.option('--info', '-i', is_flag=True)
-def click_params(load_media, open_folder, load_preset, info):
-    if load_media:
-        startup(load_media=load_media)
+@click.option('--sox_params', '-sox')
+def click_params(load_media, open_folder, load_preset, info, sox_params):
+    options_list = [None, None, None, None, None]
 
-def startup(load_media=None, open_folder=None, load_preset=None, info=None):
+    # Update list based on provided options
+    if load_media:
+        options_list[0] = load_media
+    if open_folder:
+        options_list[1] = open_folder
+    if load_preset:
+        options_list[2] = load_preset
+    if info:
+        options_list[3] = info
+    if sox_params:
+        options_list[4] = sox_params
+
+    startup(*options_list)
+
+def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_params=None):
     global media_info
+
+    if sox_params is None:
+        path = 'sox_params.txt'
+        # Open the file and read its contents
+        with open(path, 'r') as file:
+            sox_params = file.read()
 
     if load_media:
         media_info = get_media_info(load_media)
@@ -152,15 +213,16 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None):
                 folder_path = f"{folder_path}_{counter}"
                 print(f'Making directory {folder_path}')
 
-        # Make folder path directory
-        os.makedirs(folder_path)
 
-        # Append new info to media_info dictionary
+        # Make folder path and append new metatdata
+        os.makedirs(folder_path)
         media_info['folder_path'] = folder_path
         media_info['folder_name'] = os.path.basename(folder_path)
 
-        # Start creating raw imges.
-        convert_to_raw()
+        convert_to_raw()                    # Convert to raw .rgb files
+        sox_effects(sox_params)             # Apply SOX effects to raw images
+        reconvert()                         # Reconvert raw .rgb files back to it's original file.
+        exit()
 
     if open_folder:
         print(open_folder)
@@ -168,6 +230,7 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None):
         print(load_preset)
     if info:
         print(info)
+
 
 def load_menu_txt():
     load_media = None
@@ -209,15 +272,16 @@ def main():
         print(e.message)
         exit()
 
-    try:
-        """Custom error handling for click"""
-        click_params(standalone_mode=False)
-    except click.ClickException as e:
-        if args[0] == '-l':
-            user_input = input('Media Input: ')
-            startup(load_media=user_input)
-        else:
-            click_error()
+    if args_len > 1:
+        try:
+            """Custom error handling for click"""
+            click_params(standalone_mode=False)
+        except click.ClickException as e:
+            if args[0] == '-l' and args_len <= 2:
+                user_input = input('Media Input: ')
+                startup(load_media=user_input)
+            else:
+                click_error()
 
 
 if __name__ == '__main__':
