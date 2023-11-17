@@ -8,10 +8,12 @@ init(autoreset=True)
 DEFAULT = Style.RESET_ALL
 LIGHT_YELLOW = '\033[93m'
 MAGENTA = '\033[95m'
+ORANGE = '\033[38;5;202m'
 
 from PIL import Image
 import subprocess
 import click
+import glob
 import cv2
 import sys
 import os
@@ -93,8 +95,6 @@ def get_video_attributes(path):
         return str(e)
 
 def convert_to_raw():
-    print(f'{LIGHT_YELLOW}Creating Raw Images...')
-
     # Folder paths
     raw_folder = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_raw')
     output = 'rgb:{}.rgb'.format(raw_folder + '\\' + media_info['folder_name'])
@@ -105,13 +105,13 @@ def convert_to_raw():
 
     # Determine media type
     if media_info['media_type'] == 'image':
+        print(f'{LIGHT_YELLOW}Creating Raw Images...')
 
-        # Run Image Magick and convert each img to raw .rgb file format.
+        # Run Image Magick and convert the img to raw .rgb file format.
         cmd = 'magick convert {} {}'.format(media_info['media_path'], output)
         subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if media_info['media_type'] == 'video':
-        import glob
 
         # Naming definitions
         name = media_info['name']
@@ -132,14 +132,19 @@ def convert_to_raw():
             # Construct the output file path
             output = 'rgb:{}.rgb'.format(os.path.join(raw_folder, os.path.basename(png_file).replace('.png', '')))
 
+            # Clear the current line and print the status message
+            sys.stdout.write("\r\033[K")  # Clear the line
+            status_message = f'{LIGHT_YELLOW}Creating Raw Image:{ORANGE} "{png_file}"'
+            sys.stdout.write(status_message)
+            sys.stdout.flush()
+
             # Construct and run the command
             cmd = 'magick convert {} {}'.format(png_file, output)
             subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            # print(png_file, os.path.isfile(png_file))
-            # print(output, os.path.isfile(output))
 
-        exit()
-        pass
+        # Move to the next line after the loop completes
+        sys.stdout.write('\n')
+        sys.stdout.flush()
 
 def sox_effects(sox_params):
     # Make directory to store modified SOX image and add new meta data to media_info dictionary.
@@ -147,7 +152,14 @@ def sox_effects(sox_params):
     media_info['sox_folder_path'] = output
     os.mkdir(output)
 
+    # Apply SOX audio effects to raw image
+    # Determine media type
     if media_info['media_type'] == 'image':
+
+        # Naming definitions
+        raw_file = os.path.join(media_info['raw_folder_path'], media_info['folder_name'])
+        output = os.path.join(output, media_info['folder_name'])
+
         print(
             f"""
         {LIGHT_YELLOW}Applying audio effects...
@@ -155,29 +167,127 @@ def sox_effects(sox_params):
         """)
 
         # Run SOX
-        raw_file = os.path.join(media_info['raw_folder_path'], media_info['folder_name'])
-        output = os.path.join(output, media_info['folder_name'])
         cmd = f'sox -t ul -c 1 -r 41k {raw_file}.rgb -t raw {output}_sox.rgb {sox_params}'
-        subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as e:
+            # Print only the stderr if it's not None
+            print('An error occurred: {}'.format(e.stderr.decode()))
+            exit()
 
     if media_info['media_type'] == 'video':
-        print(sox_params, 'video')
+        # Variable Definitions
+        raw_file = media_info['raw_folder_path']
+        num_lines_in_status_message = 2
+
+        # ANSI escape codes for status message
+        def clear_lines(num_lines):
+            # Move up one line and clear line
+            for _ in range(num_lines):
+                sys.stdout.write("\033[A\033[K")
+
+        # Iterate over each .png file in the seq_folder_path
+        for rgb_file in glob.glob(os.path.join(raw_file, '*.rgb')):
+            frame = os.path.basename(rgb_file)
+            raw_cursor = os.path.join(raw_file, frame)
+            sox_output = os.path.join(output, os.path.splitext(frame)[0] + '_sox' + os.path.splitext(frame)[1])
+
+            status_message = f"""
+                {LIGHT_YELLOW}Applying audio effects to {ORANGE}"{frame}"
+                {MAGENTA}{sox_params}
+            """
+
+            # Clear previous message
+            if rgb_file != glob.glob(os.path.join(raw_file, '*.rgb'))[0]:  # Skip clearing for the first file
+                clear_lines(num_lines_in_status_message + 1)
+
+            # Print status
+            sys.stdout.write(status_message)
+            sys.stdout.flush()  # Clear the buffer
+
+            # Run SOX
+            cmd = f'sox -t ul -c 1 -r 41k {raw_cursor} -t raw {sox_output} {sox_params}'
+            try:
+                subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except subprocess.CalledProcessError as e:
+                # Print only the stderr if it's not None
+                print('An error occurred: {}'.format(e.stderr.decode()))
+                exit()
+
+        sys.stdout.write('\n')  # Move to the next line after the loop completes
+        sys.stdout.flush()
+
 
 def reconvert():
-    # Reconvert raw .rgb back to its original file type
-    og_file = os.path.join(media_info['sox_folder_path'], os.path.basename(media_info['sox_folder_path']))
-    filetype = media_info['filetype']
-    width = media_info['width']
+    print(f'{LIGHT_YELLOW}Re-converting raw files back to png.')
+
+    # Folder where the .rgb files are located
+    sox_folder_path = media_info['sox_folder_path']
     height = media_info['height']
+    width = media_info['width']
 
-    # For Output
-    filename = os.path.join(media_info['folder_path'], media_info['name'] + '_fckt')
-    media_info['fkt_filename'] = f'{filename}.{filetype}'  # Append to dictionary
-    output = f'{filename}.{filetype}'
+    if media_info['media_type'] == 'image':
+        filetype = media_info['filetype']
 
-    # Execute conversion
-    cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{og_file}.rgb {output}'
-    subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if media_info['media_type'] =='video':
+        # Make new directory to store newly created images
+        new_path = os.path.join(media_info['folder_path'], media_info['name'] + '_fckt')
+        media_info['seq_fckt_folder_path'] = new_path
+        os.mkdir(new_path)
+        filetype = 'png'
+
+    # Iterate over each .rgb file in the sox_folder_path
+    for rgb_file in glob.glob(os.path.join(sox_folder_path, '*.rgb')):
+        # Variable declarations
+        new_filename = os.path.basename(rgb_file).replace('.rgb', '_fckt')
+        output = ''
+        cmd = ''
+
+        if media_info['media_type'] == 'image':
+            output = os.path.join(media_info['folder_path'], new_filename + f'.{filetype}')
+            cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{rgb_file} {output}'
+
+            # Update dictionary with the new output filename
+            media_info['fkt_filename'] = output
+
+        if media_info['media_type'] == 'video':
+            output = os.path.join(f'{new_path}', f'{new_filename}.{filetype}')
+            cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{rgb_file} {output}'
+
+        # Clear the current line and print the status message
+        sys.stdout.write("\r\033[K")
+        status_message = f'{LIGHT_YELLOW}Converting {ORANGE}"{rgb_file}"{LIGHT_YELLOW} to {ORANGE}"{output}"'
+        sys.stdout.write(status_message)
+        sys.stdout.flush()
+
+        # Execute conversion for each file
+        subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    sys.stdout.write('\n')  # Move to the next line after the loop completes
+    sys.stdout.flush()
+
+def create_video_from_images():
+    # If file format is video, convert image sequence into .mp4
+    if media_info['media_type'] == 'video':
+        seq_folder_path = media_info['seq_fckt_folder_path']
+        output_folder_path = media_info['folder_path']
+        output_video_file = os.path.join(output_folder_path, media_info['name'] + '_fckt.mp4')
+        framerate = media_info['fps']
+
+        # Construct the FFmpeg command
+        # The pattern "kev%04d_sox_fckt.png" assumes that the numbering in the filenames is zero-padded to 4 digits
+        cmd = [
+            'ffmpeg',
+            '-framerate', str(framerate),  # Set the input frame rate
+            '-i', os.path.join(seq_folder_path, 'kev%04d_sox_fckt.png'),  # Input file pattern
+            '-c:v', 'libx264',  # Set the video codec to libx264 for H.264
+            '-pix_fmt', 'yuv420p',  # Set pixel format to yuv420p for compatibility
+            '-vf', 'format=yuv420p',  # This ensures the output uses a pixel format compatible with most players
+            output_video_file  # Output file path
+        ]
+
+        # Run the FFmpeg command
+        subprocess.run(cmd, check=True)
 
 @click.command()
 @click.option('--load_media', '-l')
@@ -223,7 +333,7 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
         if os.path.exists(folder_path):
             print(
                 f"""
-                {LIGHT_YELLOW}{base_folder_name} already exists...{DEFAULT}
+                {ORANGE}"{base_folder_name}" {DEFAULT}already exists...
                 ----------------------------------
                 | Overwrite | Keep Both | Cancel |
                   ^           ^           ^
@@ -263,7 +373,7 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
         print(info)
 
 def fukitup_(sox_params=None, user_prompt=None):
-    if user_prompt:
+    if user_prompt: # Bypass the prompt if '-b' or '--bypass' flag is used
         name = '"{}.{}"'.format(media_info['name'], media_info['filetype'])
         print(
             f"""
@@ -278,11 +388,14 @@ def fukitup_(sox_params=None, user_prompt=None):
             convert_to_raw()  # Convert to raw .rgb files
             sox_effects(sox_params)  # Apply SOX effects to raw images
             reconvert()  # Reconvert raw .rgb files back to it's original file.
+            create_video_from_images()
     else:
         convert_to_raw()  # Convert to raw .rgb files
         sox_effects(sox_params)  # Apply SOX effects to raw images
         reconvert()  # Reconvert raw .rgb files back to it's original file.
+        create_video_from_images()
 
+    print('DONE')
     exit()
 
 def load_menu_txt():
