@@ -94,26 +94,51 @@ def get_video_attributes(path):
 
 def convert_to_raw():
     print(f'{LIGHT_YELLOW}Creating Raw Images...')
-    # print(media_info)
 
-    # Make directory to store RAW images.
+    # Folder paths
     raw_folder = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_raw')
     output = 'rgb:{}.rgb'.format(raw_folder + '\\' + media_info['folder_name'])
-    os.makedirs(raw_folder)
 
-    # Append new metadata to dictionary
+    # Make directory to store RAW images and append new metadata to dictionary
+    os.makedirs(raw_folder)
     media_info['raw_folder_path'] = raw_folder
 
     # Determine media type
     if media_info['media_type'] == 'image':
+
         # Run Image Magick and convert each img to raw .rgb file format.
         cmd = 'magick convert {} {}'.format(media_info['media_path'], output)
         subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if media_info['media_type'] == 'video':
-        # TODO: Convert video to a image sequence stored in _seq folder
-        # TODO: Run Image Magick and convert each img to raw .rgb file format
-        print(media_info)
+        import glob
+
+        # Naming definitions
+        name = media_info['name']
+        filetype = media_info['filetype']
+
+        # Make directory to store video frames and append new metadata to dictionary
+        seq_folder = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_seq')
+        os.makedirs(seq_folder)
+        media_info['seq_folder_path'] = seq_folder
+
+        # Run FFMPEG to get video frames
+        cmd = f'ffmpeg -i {name}.{filetype} {seq_folder}\\{name}%04d.png'
+        subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Run Image Magick and convert each img to raw .rgb file format
+        # Iterate over each .png file in the seq_folder_path
+        for png_file in glob.glob(os.path.join(seq_folder, '*.png')):
+            # Construct the output file path
+            output = 'rgb:{}.rgb'.format(os.path.join(raw_folder, os.path.basename(png_file).replace('.png', '')))
+
+            # Construct and run the command
+            cmd = 'magick convert {} {}'.format(png_file, output)
+            subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # print(png_file, os.path.isfile(png_file))
+            # print(output, os.path.isfile(output))
+
+        exit()
         pass
 
 def sox_effects(sox_params):
@@ -146,7 +171,8 @@ def reconvert():
     height = media_info['height']
 
     # For Output
-    filename = os.path.join(media_info['folder_path'], media_info['folder_name'] + 't')
+    filename = os.path.join(media_info['folder_path'], media_info['name'] + '_fckt')
+    media_info['fkt_filename'] = f'{filename}.{filetype}'  # Append to dictionary
     output = f'{filename}.{filetype}'
 
     # Execute conversion
@@ -159,8 +185,10 @@ def reconvert():
 @click.option('--load_preset', '-lp')
 @click.option('--info', '-i', is_flag=True)
 @click.option('--sox_params', '-sox')
-def click_params(load_media, open_folder, load_preset, info, sox_params):
-    options_list = [None, None, None, None, None]
+@click.option('--bypass', '-b', is_flag=True)
+def click_params(load_media, open_folder, load_preset, info, sox_params, bypass):
+    # load_media, open_folder, load_preset, info, sox_params, bypass
+    options_list = [None, None, None, None, None, None]
 
     # Update list based on provided options
     if load_media:
@@ -173,10 +201,12 @@ def click_params(load_media, open_folder, load_preset, info, sox_params):
         options_list[3] = info
     if sox_params:
         options_list[4] = sox_params
+    if bypass:
+        options_list[5] = bypass
 
     startup(*options_list)
 
-def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_params=None):
+def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_params=None, bypass=None):
     global media_info
 
     if sox_params is None:
@@ -211,7 +241,7 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
                 while os.path.exists(f"{folder_path}_{counter}"):
                     counter += 1
                 folder_path = f"{folder_path}_{counter}"
-                print(f'Making directory {folder_path}')
+                print(f'{LIGHT_YELLOW}Making directory: {DEFAULT}"{folder_path}"')
 
 
         # Make folder path and append new metatdata
@@ -219,10 +249,11 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
         media_info['folder_path'] = folder_path
         media_info['folder_name'] = os.path.basename(folder_path)
 
-        convert_to_raw()                    # Convert to raw .rgb files
-        sox_effects(sox_params)             # Apply SOX effects to raw images
-        reconvert()                         # Reconvert raw .rgb files back to it's original file.
-        exit()
+        # If '-b or --bypass' flag is used then skip the user prompt.
+        if bypass:
+            fukitup_(sox_params=sox_params, user_prompt=False)
+        else:
+            fukitup_(sox_params=sox_params)
 
     if open_folder:
         print(open_folder)
@@ -231,6 +262,28 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
     if info:
         print(info)
 
+def fukitup_(sox_params=None, user_prompt=None):
+    if user_prompt:
+        name = '"{}.{}"'.format(media_info['name'], media_info['filetype'])
+        print(
+            f"""
+            {Fore.GREEN}{name}{LIGHT_YELLOW} successfully loaded.{DEFAULT}
+            ------------------------------------------------
+            | FUKITUP | 
+              ^
+            """
+        )
+        user_input = input('Watcha wanna do: ').lower()
+        if user_input == 'f':
+            convert_to_raw()  # Convert to raw .rgb files
+            sox_effects(sox_params)  # Apply SOX effects to raw images
+            reconvert()  # Reconvert raw .rgb files back to it's original file.
+    else:
+        convert_to_raw()  # Convert to raw .rgb files
+        sox_effects(sox_params)  # Apply SOX effects to raw images
+        reconvert()  # Reconvert raw .rgb files back to it's original file.
+
+    exit()
 
 def load_menu_txt():
     load_media = None
@@ -246,16 +299,18 @@ def load_menu_txt():
         """
     )
     user_input = input(f'Whatcha wanna do: ').lower()
+    # load_media, open_folder, load_preset, info, sox_params
+    options_list = [None, None, None, None, None]
 
     if user_input == 'l':
-        load_media = dequote(input(f'Media Path: '))
+        options_list[0] = dequote(input(f'Media Path: '))
     if user_input == 'e':
         exit()
 
-    return load_media
+    return options_list
 
 def load_menu():
-    startup(load_media=load_menu_txt())
+    startup(*load_menu_txt())
 
 # This isn't really the main function... The function that's doing the most is actually the startup() function.
 def main():
