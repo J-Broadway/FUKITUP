@@ -1,0 +1,3 @@
+- Importing files with "spaces like this" returns an error
+- Remove the init.py it's not really working.
+- Potentially do multi threading to speed up script?
