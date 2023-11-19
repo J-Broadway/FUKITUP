@@ -14,6 +14,7 @@ from PIL import Image
 import subprocess
 import click
 import glob
+import json
 import cv2
 import sys
 import os
@@ -102,6 +103,7 @@ def convert_to_raw():
     # Make directory to store RAW images and append new metadata to dictionary
     os.makedirs(raw_folder)
     media_info['raw_folder_path'] = raw_folder
+    re_save_dictionary(media_info, media_info['json_file_path'])
 
     # Determine media type
     if media_info['media_type'] == 'image':
@@ -121,6 +123,7 @@ def convert_to_raw():
         seq_folder = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_seq')
         os.makedirs(seq_folder)
         media_info['seq_folder_path'] = seq_folder
+        re_save_dictionary(media_info, media_info['json_file_path'])
 
         # Run FFMPEG to get video frames
         cmd = f'ffmpeg -i {name}.{filetype} {seq_folder}\\{name}%04d.png'
@@ -147,10 +150,14 @@ def convert_to_raw():
         sys.stdout.flush()
 
 def sox_effects(sox_params):
-    # Make directory to store modified SOX image and add new meta data to media_info dictionary.
+    # Make directory to store modified SOX image and add new metadata to media_info dictionary.
     output = os.path.join(media_info['folder_path'], media_info['folder_name'] + '_sox')
     media_info['sox_folder_path'] = output
-    os.mkdir(output)
+    re_save_dictionary(media_info, media_info['json_file_path'])
+
+    # Skip over folder if it already exists
+    if not os.path.exists(output):
+        os.mkdir(output)
 
     # Apply SOX audio effects to raw image
     # Determine media type
@@ -233,8 +240,11 @@ def reconvert():
         # Make new directory to store newly created images
         new_path = os.path.join(media_info['folder_path'], media_info['name'] + '_fckt')
         media_info['seq_fckt_folder_path'] = new_path
-        os.mkdir(new_path)
         filetype = 'png'
+
+        # Skip over folder if it already exists
+        if not os.path.exists(new_path):
+            os.mkdir(new_path)
 
     # Iterate over each .rgb file in the sox_folder_path
     for rgb_file in glob.glob(os.path.join(sox_folder_path, '*.rgb')):
@@ -247,8 +257,9 @@ def reconvert():
             output = os.path.join(media_info['folder_path'], new_filename + f'.{filetype}')
             cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{rgb_file} {output}'
 
-            # Update dictionary with the new output filename
+            # Update dictionary with the new output filename metadata.
             media_info['fkt_filename'] = output
+            re_save_dictionary(media_info, media_info['json_file_path'])
 
         if media_info['media_type'] == 'video':
             output = os.path.join(f'{new_path}', f'{new_filename}.{filetype}')
@@ -272,6 +283,7 @@ def create_video_from_images():
         seq_folder_path = media_info['seq_fckt_folder_path']
         output_folder_path = media_info['folder_path']
         output_video_file = os.path.join(output_folder_path, media_info['name'] + '_fckt.mp4')
+        name =  media_info['name']
         framerate = media_info['fps']
 
         # Construct the FFmpeg command
@@ -279,13 +291,13 @@ def create_video_from_images():
         cmd = [
             'ffmpeg',
             '-framerate', str(framerate),  # Set the input frame rate
-            '-i', os.path.join(seq_folder_path, 'kev%04d_sox_fckt.png'),  # Input file pattern
+            '-i', os.path.join(seq_folder_path, f'{name}%04d_sox_fckt.png'),  # Input file pattern
             '-c:v', 'libx264',  # Set the video codec to libx264 for H.264
             '-pix_fmt', 'yuv420p',  # Set pixel format to yuv420p for compatibility
             '-vf', 'format=yuv420p',  # This ensures the output uses a pixel format compatible with most players
             output_video_file  # Output file path
         ]
-
+        print(cmd)
         # Run the FFmpeg command
         subprocess.run(cmd, check=True)
 
@@ -325,6 +337,9 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
         with open(path, 'r') as file:
             sox_params = file.read()
 
+    ####################################################################################################################
+    # LOAD MEDIA
+    ####################################################################################################################
     if load_media:
         media_info = get_media_info(load_media)
         base_folder_name = f"{media_info['name']}_fck"
@@ -353,9 +368,16 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
                 folder_path = f"{folder_path}_{counter}"
                 print(f'{LIGHT_YELLOW}Making directory: {DEFAULT}"{folder_path}"')
 
-
-        # Make folder path and append new metatdata
+        # Make directory to store contents
         os.makedirs(folder_path)
+
+        # Make 'media_info.json' file and store in 'folder_path'
+        json_file_path = os.path.join(folder_path, 'media_info.json')
+        media_info['json_file_path'] = json_file_path
+        with open(json_file_path, 'w') as json_file:
+            json.dump(media_info, json_file, indent=4)
+
+        # Append new metatdata
         media_info['folder_path'] = folder_path
         media_info['folder_name'] = os.path.basename(folder_path)
 
@@ -363,36 +385,100 @@ def startup(load_media=None, open_folder=None, load_preset=None, info=None, sox_
         if bypass:
             fukitup_(sox_params=sox_params, user_prompt=False)
         else:
-            fukitup_(sox_params=sox_params)
+            fukitup_(sox_params=sox_params, user_prompt=True)
 
+    ####################################################################################################################
+    # OPEN FOLDER
+    ####################################################################################################################
     if open_folder:
-        print(open_folder)
+        # Check if path exists
+        if os.path.exists(open_folder):
+            # Load media info from .json
+            load_dictionary_from_json(os.path.join(open_folder, 'media_info.json'))
+
+            successful_load()
+
+            user_input = input(f'Whatcha wanna do: ').lower()
+            if user_input == 'f':
+                sox_effects(sox_params)  # Apply SOX effects to raw images
+                reconvert()  # Reconvert raw .rgb files back to its original file.
+                create_video_from_images()
+        else:
+            print(f'{Fore.RED}ERROR: Folder "{open_folder}" does not exist.')
+        exit()
     if load_preset:
         print(load_preset)
     if info:
         print(info)
 
+# Saves dictionary as a .json given a provided 'path'
+def save_dictionary_as_json(dictionary, path):
+    if isinstance(dictionary, dict):
+        # Save the dictionary as a JSON file
+        with open(path, 'w') as json_file:
+            json.dump(dictionary, json_file, indent=4)
+    else:
+        return "Error: The variable is not a dictionary."
+
+my_dict = {'name': 'John', 'age': 30, 'city': 'New York'}
+
+# Loads .json file as a dictionary
+def load_dictionary_from_json(json_path, specified_name=None):
+    # Check if the JSON file exists
+    if not os.path.exists(json_path):
+        return "Error: JSON file does not exist."
+
+    # Load the dictionary from the JSON file
+    with open(json_path, 'r') as json_file:
+        dictionary = json.load(json_file)
+
+    # Determine the dictionary's name
+    if specified_name is None:
+        specified_name = os.path.splitext(os.path.basename(json_path))[0]
+
+    # Assign the loaded dictionary to a global variable with the specified name
+    globals()[specified_name] = dictionary
+    return f"Dictionary loaded as '{specified_name}'"
+
+# Save the specified 'dictionary' to 'json_path'
+def re_save_dictionary(dictionary, json_path):
+    # Ensure the provided object is a dictionary
+    if not isinstance(dictionary, dict):
+        return "Error: Provided object is not a dictionary."
+
+    # Save the dictionary to the specified JSON file
+    with open(json_path, 'w') as json_file:
+        json.dump(dictionary, json_file, indent=4)
+
+    return "Dictionary saved successfully."
+
+def successful_load():
+    name = '"{}.{}"'.format(media_info['name'], media_info['filetype'])
+    print(
+        f"""
+        {Fore.GREEN}{name}{LIGHT_YELLOW} successfully loaded.{DEFAULT}
+        ------------------------------------------------
+        | FUKITUP | 
+          ^
+        """
+    )
+
 def fukitup_(sox_params=None, user_prompt=None):
     if user_prompt: # Bypass the prompt if '-b' or '--bypass' flag is used
         name = '"{}.{}"'.format(media_info['name'], media_info['filetype'])
-        print(
-            f"""
-            {Fore.GREEN}{name}{LIGHT_YELLOW} successfully loaded.{DEFAULT}
-            ------------------------------------------------
-            | FUKITUP | 
-              ^
-            """
-        )
+
+        successful_load()
+
         user_input = input('Watcha wanna do: ').lower()
         if user_input == 'f':
             convert_to_raw()  # Convert to raw .rgb files
             sox_effects(sox_params)  # Apply SOX effects to raw images
-            reconvert()  # Reconvert raw .rgb files back to it's original file.
+            reconvert()  # Reconvert raw .rgb files back to its original file.
             create_video_from_images()
     else:
         convert_to_raw()  # Convert to raw .rgb files
         sox_effects(sox_params)  # Apply SOX effects to raw images
-        reconvert()  # Reconvert raw .rgb files back to it's original file.
+        reconvert()  # Reconvert raw .rgb files back to its original file.
         create_video_from_images()
 
     print('DONE')
@@ -417,6 +503,8 @@ def load_menu_txt():
 
     if user_input == 'l':
         options_list[0] = dequote(input(f'Media Path: '))
+    if user_input == 'o':
+        options_list[1] = dequote(input(f'Media Path: '))
     if user_input == 'e':
         exit()
 
