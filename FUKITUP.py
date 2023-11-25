@@ -1,9 +1,8 @@
-import init
-init.main()
-
 from colorama import init, Fore, Style
+
 # Initialize Colorama
 init(autoreset=True)
+
 # Custom Colors
 DEFAULT = Style.RESET_ALL
 LIGHT_YELLOW = '\033[93m'
@@ -110,13 +109,14 @@ def convert_to_raw():
         print(f'{LIGHT_YELLOW}Creating Raw Images...')
 
         # Run Image Magick and convert the img to raw .rgb file format.
-        cmd = 'magick convert {} {}'.format(media_info['media_path'], output)
+        cmd = 'magick convert "{}" "{}"'.format(media_info['media_path'], output)
         subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if media_info['media_type'] == 'video':
 
         # Naming definitions
         name = media_info['name']
+        media_path = media_info['media_path']
         filetype = media_info['filetype']
 
         # Make directory to store video frames and append new metadata to dictionary
@@ -126,7 +126,7 @@ def convert_to_raw():
         re_save_dictionary(media_info, media_info['json_file_path'])
 
         # Run FFMPEG to get video frames
-        cmd = f'ffmpeg -i {name}.{filetype} {seq_folder}\\{name}%04d.png'
+        cmd = f'ffmpeg -i "{media_path}" "{seq_folder}\\{name}%04d.png"'
         subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Run Image Magick and convert each img to raw .rgb file format
@@ -142,7 +142,7 @@ def convert_to_raw():
             sys.stdout.flush()
 
             # Construct and run the command
-            cmd = 'magick convert {} {}'.format(png_file, output)
+            cmd = 'magick convert "{}" "{}"'.format(png_file, output)
             subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Move to the next line after the loop completes
@@ -174,7 +174,7 @@ def sox_effects(sox_params):
         """)
 
         # Run SOX
-        cmd = f'sox -t ul -c 1 -r 41k {raw_file}.rgb -t raw {output}_sox.rgb {sox_params}'
+        cmd = f'sox -t ul -c 1 -r 41k "{raw_file}.rgb" -t raw "{output}_sox.rgb" {sox_params}'
         try:
             subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
@@ -213,7 +213,7 @@ def sox_effects(sox_params):
             sys.stdout.flush()  # Clear the buffer
 
             # Run SOX
-            cmd = f'sox -t ul -c 1 -r 41k {raw_cursor} -t raw {sox_output} {sox_params}'
+            cmd = f'sox -t ul -c 1 -r 41k "{raw_cursor}" -t raw "{sox_output}" {sox_params}'
             try:
                 subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             except subprocess.CalledProcessError as e:
@@ -250,12 +250,13 @@ def reconvert():
     for rgb_file in glob.glob(os.path.join(sox_folder_path, '*.rgb')):
         # Variable declarations
         new_filename = os.path.basename(rgb_file).replace('.rgb', '_fckt')
+        basename = os.path.basename(rgb_file)
         output = ''
         cmd = ''
 
         if media_info['media_type'] == 'image':
             output = os.path.join(media_info['folder_path'], new_filename + f'.{filetype}')
-            cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{rgb_file} {output}'
+            cmd = f'magick convert -size {width}x{height} -depth 8 rgb:"{rgb_file}" "{output}"'
 
             # Update dictionary with the new output filename metadata.
             media_info['fkt_filename'] = output
@@ -263,11 +264,11 @@ def reconvert():
 
         if media_info['media_type'] == 'video':
             output = os.path.join(f'{new_path}', f'{new_filename}.{filetype}')
-            cmd = f'magick convert -size {width}x{height} -depth 8 rgb:{rgb_file} {output}'
+            cmd = f'magick convert -size {width}x{height} -depth 8 rgb:"{rgb_file}" "{output}"'
 
         # Clear the current line and print the status message
         sys.stdout.write("\r\033[K")
-        status_message = f'{LIGHT_YELLOW}Converting {ORANGE}"{rgb_file}"{LIGHT_YELLOW} to {ORANGE}"{output}"'
+        status_message = f'{LIGHT_YELLOW}Converting {ORANGE}"{basename}"{LIGHT_YELLOW} to {ORANGE}"{filetype}"'
         sys.stdout.write(status_message)
         sys.stdout.flush()
 
