@@ -1,7 +1,4 @@
-- Importing files with "spaces like this" returns an error
-- Remove the init.py it's not really working.
 - Potentially do multi threading to speed up script
 - Loading media should create raw images first before prompting user on selection
-- Loading media from different paths (other than where root program is) isn't working.
 - Frame sampling so you can pick a specific frame to run FX on.
 - Opting to keep both files should just put the new folder inside the folder path instead of the root folder
