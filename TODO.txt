@@ -1,4 +1,4 @@
-- Potentially do multi threading to speed up script
 - Loading media should create raw images first before prompting user on selection
 - Frame sampling so you can pick a specific frame to run FX on.
 - Opting to keep both files should just put the new folder inside the folder path instead of the root folder
+- Add more verbose print() prompts to indicate to user what's going on.
