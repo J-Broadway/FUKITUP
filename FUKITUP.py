@@ -96,7 +96,10 @@ def get_video_attributes(path):
     except Exception as e:
         return str(e)
 
-def process_png_file(png_file, raw_folder, seq_folder):
+def process_png_file(png_file, raw_folder):
+    file = os.path.basename(png_file)
+    print(f'{LIGHT_YELLOW}Processing {ORANGE}"{file}"')
+
     output = 'rgb:{}.rgb'.format(os.path.join(raw_folder, os.path.basename(png_file).replace('.png', '')))
     cmd = f'magick convert "{png_file}" "{output}"'
     subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -131,7 +134,7 @@ def convert_to_raw():
         png_files = glob.glob(os.path.join(seq_folder, '*.png'))
 
         with Pool() as pool:
-            pool.starmap(process_png_file, [(png_file, raw_folder, seq_folder) for png_file in png_files])
+            pool.starmap(process_png_file, [(png_file, raw_folder) for png_file in png_files])
 
         print(f"{LIGHT_YELLOW}All images converted to raw format.")
 
