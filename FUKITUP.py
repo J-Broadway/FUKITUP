@@ -45,7 +45,7 @@ def get_media_info(path):
         return media_info
 
 def classify_media(path):
-    image_formats = {'png', 'jpg', 'tif', 'tiff'}
+    image_formats = {'png', 'jpg', 'tif', 'tiff', 'jiff'}
     video_formats = {'mp4', 'mov', 'gif'}
 
     _, ext = os.path.splitext(path)
@@ -114,7 +114,7 @@ def convert_to_raw():
 
     if media_info['media_type'] == 'image':
         print(f'{LIGHT_YELLOW}Creating Raw Images...')
-        cmd = f'magick convert "{media_info["media_path"]}" "{output}"'
+        cmd = f'magick convert "{media_info["media_path"]}" "{output}.rgb"'
         subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     elif media_info['media_type'] == 'video':
@@ -179,9 +179,9 @@ def sox_effects(sox_params):
 
         print(f"{LIGHT_YELLOW}Audio effects applied to all frames.")
 
-def convert_rgb_file(rgb_file, sox_folder_path, new_path, width, height, media_type, filetype):
+def convert_rgb_file(rgb_file, sox_folder_path, new_path, width, height, media_type, filetype, folder_path):
     new_filename = os.path.basename(rgb_file).replace('.rgb', '_fckt')
-    output = os.path.join(new_path, f'{new_filename}.{filetype}') if media_type == 'video' else os.path.join(sox_folder_path, new_filename + f'.{filetype}')
+    output = os.path.join(new_path, f'{new_filename}.{filetype}') if media_type == 'video' else os.path.join(folder_path, new_filename + f'.{filetype}')
 
     cmd = f'magick convert -size {width}x{height} -depth 8 rgb:"{rgb_file}" "{output}"'
     subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -195,6 +195,7 @@ def reconvert():
     media_type = media_info['media_type']
     filetype = media_info['filetype'] if media_type == 'image' else 'png'
     new_path = media_info['folder_path'] if media_type == 'image' else os.path.join(media_info['folder_path'], media_info['name'] + '_fckt')
+    folder_path = media_info['folder_path']
 
     # Append new info to dictionary
     media_info['seq_fckt_folder_path'] = new_path
@@ -207,7 +208,7 @@ def reconvert():
 
     # Create a multiprocessing pool and process each RGB file in parallel
     with Pool() as pool:
-        pool.starmap(convert_rgb_file, [(rgb_file, sox_folder_path, new_path, width, height, media_type, filetype) for rgb_file in rgb_files])
+        pool.starmap(convert_rgb_file, [(rgb_file, sox_folder_path, new_path, width, height, media_type, filetype, folder_path) for rgb_file in rgb_files])
 
     print(f"{LIGHT_YELLOW}All files have been reconverted.")
 
